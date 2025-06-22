@@ -69,10 +69,10 @@ sudo systemctl status xigmatek-monitor
 | Distribution | Status | Package Manager |
 |--------------|--------|----------------|
 | Arch Linux   | ✅ Tested | pacman |
-| Ubuntu 20.04+ | ✅ Tested | apt |
-| Fedora 35+   | ✅ Tested | dnf |
-| Debian 11+   | ✅ Tested | apt |
-| openSUSE     | ✅ Tested | zypper |
+| Ubuntu 20.04+ | 🚧 Testing | apt |
+| Fedora 35+   | 🚧 Testing | dnf |
+| Debian 11+   | 🚧 Testing | apt |
+| openSUSE     | 🚧 Testing | zypper |
 
 ## 🔧 Configuration
 
