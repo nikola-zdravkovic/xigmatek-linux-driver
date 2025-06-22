@@ -1,0 +1,61 @@
+[Unit]
+Description=XIGMATEK Temperature Monitor
+Documentation=https://github.com/YOUR_USERNAME/xigmatek-linux-driver
+After=multi-user.target graphical-session.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/xigmatek-monitor.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Output configuration
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xigmatek-monitor
+
+# Environment variables
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/usr/local/lib/python3/site-packages
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+# Required directories and devices
+ReadWritePaths=/var/log
+DeviceAllow=/dev/hidraw* rw
+DevicePolicy=closed
+
+# Network restrictions
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+
+# File system restrictions
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+PrivateUsers=true
+RemoveIPC=true
+
+[Install]
+WantedBy=multi-user.target
+Also=graphical-session.target
