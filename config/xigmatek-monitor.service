@@ -1,6 +1,6 @@
 [Unit]
 Description=XIGMATEK Temperature Monitor
-Documentation=https://github.com/YOUR_USERNAME/xigmatek-linux-driver
+Documentation=https://github.com/nikola-zdravkovic/xigmatek-linux-driver
 After=multi-user.target graphical-session.target
 Wants=multi-user.target
 

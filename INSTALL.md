@@ -20,10 +20,10 @@ The setup script automatically detects your Linux distribution and installs all 
 
 ```bash
 # Download and run the setup script
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/xigmatek-linux-driver/main/setup.sh | bash
+curl -sSL https://raw.githubusercontent.com/nikola-zdravkovic/xigmatek-linux-driver/main/setup.sh | bash
 
 # Or download first, then run
-wget https://raw.githubusercontent.com/YOUR_USERNAME/xigmatek-linux-driver/main/setup.sh
+wget https://raw.githubusercontent.com/nikola-zdravkovic/xigmatek-linux-driver/main/setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -77,7 +77,7 @@ sensors
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/xigmatek-linux-driver.git
+git clone https://github.com/nikola-zdravkovic/xigmatek-linux-driver.git
 cd xigmatek-linux-driver
 
 # Or download specific files manually

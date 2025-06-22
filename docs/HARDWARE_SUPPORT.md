@@ -396,4 +396,4 @@ If you have incompatible or untested XIGMATEK devices and are willing to help wi
 ---
 
 **Last Updated:** June 2025  
-**Contributors:** Community hardware testers and developers
+**Contributors:** Nikola Zdravkovic

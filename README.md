@@ -26,14 +26,14 @@
 
 ```bash
 # Download and run the setup script
-curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/xigmatek-linux-driver/main/setup.sh | bash
+curl -sSL https://raw.githubusercontent.com/nikola-zdravkovic/xigmatek-linux-driver/main/setup.sh | bash
 ```
 
 ### Manual Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/xigmatek-linux-driver.git
+git clone https://github.com/nikola-zdravkovic/xigmatek-linux-driver.git
 cd xigmatek-linux-driver
 
 # Run setup script
@@ -203,8 +203,8 @@ This is an **unofficial, community-developed driver**. It is not affiliated with
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/YOUR_USERNAME/xigmatek-linux-driver/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/YOUR_USERNAME/xigmatek-linux-driver/discussions)
+- **Issues**: [GitHub Issues](https://github.com/nikola-zdravkovic/xigmatek-linux-driver/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/nikola-zdravkovic/xigmatek-linux-driver/discussions)
 - **Email**: your-email@example.com
 
 ---

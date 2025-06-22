@@ -44,7 +44,7 @@ Thank you for your interest in contributing! This project welcomes contributions
 1. **Fork the repository**
    ```bash
    # On GitHub, click "Fork" button
-   git clone https://github.com/YOUR_USERNAME/xigmatek-linux-driver.git
+   git clone https://github.com/nikola-zdravkovic/xigmatek-linux-driver.git
    cd xigmatek-linux-driver
    ```
 
