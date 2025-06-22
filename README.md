@@ -8,8 +8,6 @@
 
 > **Unofficial Linux driver for XIGMATEK LK 360 Digital Arctic AIO cooler with real-time temperature display**
 
-![XIGMATEK Display Demo](https://via.placeholder.com/400x200/1a1a1a/00ff00?text=CPU%3A+65°C%0AGPU%3A+58°C)
-
 ## 🎯 Features
 
 - ✅ **Real-time temperature monitoring** on LCD display
