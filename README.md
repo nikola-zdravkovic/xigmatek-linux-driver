@@ -203,7 +203,7 @@ This is an **unofficial, community-developed driver**. It is not affiliated with
 
 - **Issues**: [GitHub Issues](https://github.com/nikola-zdravkovic/xigmatek-linux-driver/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/nikola-zdravkovic/xigmatek-linux-driver/discussions)
-- **Email**: your-email@example.com
+- **Email**: contact@nikola-zdravkovic.com
 
 ---
 
