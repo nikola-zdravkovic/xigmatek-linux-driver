@@ -27,40 +27,65 @@ detect_distro() {
     else
         DISTRO="unknown"
     fi
-    
+
     echo "🐧 Detected OS: $DISTRO"
 }
 
-# Install packages based on distribution
+# Detect package manager based on available commands
+detect_package_manager() {
+    if command -v pacman &> /dev/null; then
+        PACKAGE_MANAGER="pacman"
+        DISTRO="arch"  # Assuming Arch-based distro
+    elif command -v apt &> /dev/null; then
+        PACKAGE_MANAGER="apt"
+        DISTRO="debian"  # Assuming Debian-based distro
+    elif command -v dnf &> /dev/null; then
+        PACKAGE_MANAGER="dnf"
+        DISTRO="fedora"  # Assuming Fedora-based distro
+    elif command -v yum &> /dev/null; then
+        PACKAGE_MANAGER="yum"
+        DISTRO="rhel"  # Assuming RHEL-based distro
+    elif command -v zypper &> /dev/null; then
+        PACKAGE_MANAGER="zypper"
+        DISTRO="opensuse"  # Assuming openSUSE-based distro
+    else
+        PACKAGE_MANAGER="unknown"
+        DISTRO="unknown"
+    fi
+
+    echo "📦 Detected Package Manager: $PACKAGE_MANAGER"
+}
+
+# Install packages based on the package manager detected
 install_packages() {
     echo "📦 Installing system packages..."
-    
-    case $DISTRO in
-        "arch"|"manjaro")
+
+    case $PACKAGE_MANAGER in
+        "pacman")
             echo "Using pacman (Arch Linux)..."
             sudo pacman -Sy --needed --noconfirm python python-pip lm_sensors python-hidapi
             ;;
-        "ubuntu"|"debian"|"linuxmint"|"pop")
+        "apt")
             echo "Using apt (Debian/Ubuntu)..."
             sudo apt update
             sudo apt install -y lm-sensors python3 python3-pip python3-hid udev
             ;;
-        "fedora"|"rhel"|"centos"|"rocky"|"almalinux")
+        "dnf"|"yum")
             echo "Using dnf/yum (Fedora/RHEL)..."
-            if command -v dnf &> /dev/null; then
+            if [ "$PACKAGE_MANAGER" = "dnf" ]; then
                 sudo dnf install -y lm_sensors python3 python3-pip python3-hidapi
             else
                 sudo yum install -y lm_sensors python3 python3-pip
                 install_hidapi_pip=true
             fi
             ;;
-        "opensuse"|"sles")
+        "zypper")
             echo "Using zypper (openSUSE)..."
             sudo zypper install -y sensors python3 python3-pip
             install_hidapi_pip=true
             ;;
         *)
-            echo "⚠️  Unknown distribution: $DISTRO"
+            echo "⚠️  Unknown package manager for distribution: $DISTRO"
             echo "Attempting generic installation..."
             install_hidapi_pip=true
             ;;
@@ -715,6 +740,7 @@ print_instructions() {
 # Main execution
 main() {
     detect_distro
+    detect_package_manager
     check_python
     install_packages
     install_hidapi_fallback
