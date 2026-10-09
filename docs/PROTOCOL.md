@@ -394,3 +394,67 @@ The XIGMATEK LK 360 Digital Arctic uses a simple but effective HID protocol for 
 4. **Timing requirements**: Proper delays and update frequencies
 
 This protocol documentation enables full Linux compatibility and provides a foundation for future enhancements and additional device support.
+---
+
+# HWCX protocol — XIGMATEK AK4 Digital (0145:1002)
+
+The AK4 Digital's screen enumerates as **`0145:1002`, manufacturer "HWCX", product "USB Display"**.
+It does **not** understand the LK 360 commands above: they are accepted by the USB stack but the screen stays
+dark. The protocol below was read from XIGMATEK's own Windows software ("AK Digital Display" v2.6:
+`TempComm.dll` builds and sends the reports, `XKWLib.dll` decides what to send) and verified on real hardware
+(Ubuntu 24.04, AK4 Digital).
+
+All reports are **65 bytes: report id `0x00` + 64 data bytes** (generic 64-byte HID IN/OUT, no report ids).
+Byte numbers below count the report id as `[0]`.
+
+## 1. Handshake (required once after opening the device)
+
+Until this challenge is answered, the screen ignores every status frame.
+
+| Byte | Value |
+|---|---|
+| 0 | `0x00` (report id) |
+| 1 | `0x01` (handshake command) |
+| 2–4 | `0x00` |
+| 5–6 | random 16-bit word `W` (big endian) |
+| 7–10 | random |
+| 11–12 | `W ^ (((b7 + b9) << 8) + b10 + b8)`, 16-bit, big endian |
+| 13–62 | random |
+| 63 | `XOR` of `(b[1+i] * i) & 0xFF` for `i = 0..59` |
+| 64 | `sum` of `(b[1+i] * i)` for `i = 0..62`, `& 0xFF` (computed after byte 63) |
+
+The screen answers with a 65-byte report whose bytes 5–6 (big endian) equal
+`((b9 << 8) + b10) ^ ((b6 + b8 + ((b5 + b7) << 8)) & 0xFFFF)` computed from the challenge
+(and carries the same two checksums). `XigmatekService.hwcx_handshake()` implements and checks this.
+
+## 2. Status frame (send about every 500 ms)
+
+| Byte | Content |
+|---|---|
+| 0 | `0x00` (report id) |
+| 1 | `0x02` (status command) |
+| 2 | CPU temperature °C |
+| 3 | GPU temperature °C |
+| 4–7 | hour, minute, second, hundredths |
+| 8–12 | century (`20`), year (`26`), month, day, weekday (`0` = Sunday) |
+| 13 | CPU load % |
+| 14–15 | CPU clock MHz (big endian) |
+| 16 | GPU load % |
+| 17–18 | GPU clock MHz (big endian) |
+| 20 | RAM usage % |
+| 25–26 | fan RPM (big endian) |
+| 49 | **page bitmask** — see below |
+| others | `0` (voltages, watts, network, disk: not shown by the AK4) |
+
+**Page bitmask (byte 49):** bit `n-1` shows page `n`; the screen rotates through the enabled pages.
+
+| Page | Bit | Shows |
+|---|---|---|
+| 1 | `0x01` | CPU temperature °C |
+| 2 | `0x02` | CPU temperature °F |
+| 3 | `0x04` | CPU load % |
+| 4 | `0x08` | RAM usage % |
+| 5 | `0x10` | CPU fan speed |
+
+`0x80` turns the display **off**. XIGMATEK's service uses pages 1, 3, 4 → **`0x0D`**.
+Pitfalls found while reverse engineering: `0x00` shows nothing at all, and `0xFF` includes the off bit.

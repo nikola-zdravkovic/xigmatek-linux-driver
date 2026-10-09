@@ -13,6 +13,9 @@ import signal
 import logging
 import json
 import os
+import glob
+import random
+import datetime
 from pathlib import Path
 
 # Setup logging
@@ -26,11 +29,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Product IDs seen under XIGMATEK's USB vendor ID 0x0145 and the protocol each one speaks.
+#   "lk360": LK 360 Digital Arctic - separate wake / CPU / GPU commands (see docs/PROTOCOL.md)
+#   "hwcx":  AK4 Digital ("HWCX USB Display") - challenge handshake, then one combined
+#            64-byte status frame (see docs/PROTOCOL.md, "HWCX protocol")
+SUPPORTED_DEVICES = {
+    0x1005: ("lk360", "XIGMATEK LK 360 Digital Arctic"),
+    0x1002: ("hwcx", "XIGMATEK AK4 Digital (HWCX USB Display)"),
+}
+
+# HWCX status-frame pages: bit (n-1) of the page byte shows page n.
+HWCX_PAGE_CPU_C, HWCX_PAGE_CPU_F, HWCX_PAGE_CPU_LOAD, HWCX_PAGE_RAM, HWCX_PAGE_FAN = 1, 2, 3, 4, 5
+HWCX_DISPLAY_OFF = 0x80
+
+
 class XigmatekService:
     def __init__(self, config_path='/etc/xigmatek-monitor.conf'):
         self.device = None
         self.vendor_id = 0x0145
         self.product_id = 0x1005
+        self.protocol = "lk360"
+        self._cpu_stat = None
+        self._temps = (None, None)
+        self._temps_at = 0.0
         self.stop_event = threading.Event()
         self.monitor_thread = None
         
@@ -49,7 +70,11 @@ class XigmatekService:
             "fallback_gpu": 40,
             "enable_logging": True,
             "wake_every_update": True,  # Send wake command with every update
-            "wake_interval": 10  # Send wake command every N updates
+            "wake_interval": 10,  # Send wake command every N updates
+            "product_id": None,  # force a product ID (e.g. 4098 for 0x1002); default: auto-detect
+            "hwcx_update_interval": 0.5,  # HWCX screens expect a frame about every 500 ms
+            "hwcx_pages": [1, 3, 4],  # pages to rotate: 1 CPU C, 2 CPU F, 3 CPU load, 4 RAM, 5 fan
+            "hwcx_fan": "auto"  # hwmon fan input to show (e.g. "fan2"), or "auto" = first spinning fan
         }
         
         try:
@@ -69,10 +94,16 @@ class XigmatekService:
         """Find XIGMATEK device among all HID devices"""
         try:
             devices = hid.enumerate()
+            forced = self.config.get('product_id')
             for device_info in devices:
-                if (device_info['vendor_id'] == self.vendor_id and 
-                    device_info['product_id'] == self.product_id):
-                    logger.info(f"Found XIGMATEK device: {device_info['path']}")
+                pid = device_info['product_id']
+                if device_info['vendor_id'] != self.vendor_id:
+                    continue
+                if (forced and pid == forced) or (not forced and pid in SUPPORTED_DEVICES):
+                    self.product_id = pid
+                    self.protocol, name = SUPPORTED_DEVICES.get(pid, ("lk360", "unknown model"))
+                    logger.info(f"Found {name} (0x{self.vendor_id:04x}:0x{pid:04x}, "
+                                f"{self.protocol} protocol): {device_info['path']}")
                     return True
             logger.warning("XIGMATEK device not found in HID enumeration")
             return False
@@ -110,6 +141,8 @@ class XigmatekService:
     
     def initialize_display(self):
         """Initialize the display"""
+        if self.protocol == "hwcx":
+            return self.hwcx_handshake()
         try:
             wake_cmd = [0x08, 0x01] + [0x00] * 62
             self.device.write(wake_cmd)
@@ -261,8 +294,169 @@ class XigmatekService:
         """Send both temperatures (legacy method)"""
         return self.send_temperatures_with_wake(cpu_temp, gpu_temp)
     
+    # ------------------------------------------------------------------ HWCX (AK4 Digital)
+    @staticmethod
+    def hwcx_checksums(pkt):
+        """Byte 63 = XOR of (byte * index), byte 64 = sum of (byte * index), over the data bytes."""
+        x = 0
+        for i in range(60):
+            x ^= (pkt[1 + i] * i) & 0xFF
+        pkt[63] = x
+        s = 0
+        for i in range(63):
+            s = (s + pkt[1 + i] * i) & 0xFF
+        pkt[64] = s
+
+    def hwcx_write(self, pkt):
+        """Write one 65-byte report (report id 0x00 + 64 data bytes)."""
+        return self.device.write(list(pkt)) > 0
+
+    def hwcx_handshake(self, attempts=3):
+        """The screen ignores status frames until this challenge (command 0x01) is answered.
+
+        Packet (65 bytes, [0] = report id): random bytes, [1]=0x01, [2..4]=0, [5..6]=random word W,
+        [11..12] = W ^ (((b7+b9)<<8) + b10 + b8), [63..64] = checksums.
+        The screen replies with [5..6] = ((b9<<8)+b10) ^ (b6+b8+((b5+b7)<<8)).
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                pkt = bytearray(random.getrandbits(8) for _ in range(65))
+                pkt[0] = 0x00
+                pkt[1] = 0x01
+                pkt[2] = pkt[3] = pkt[4] = 0x00
+                w = random.getrandbits(16)
+                pkt[5], pkt[6] = w >> 8, w & 0xFF
+                a = (((pkt[7] + pkt[9]) << 8) + pkt[10] + pkt[8]) & 0xFFFF
+                x = (w ^ a) & 0xFFFF
+                pkt[11], pkt[12] = x >> 8, x & 0xFF
+                self.hwcx_checksums(pkt)
+                expected = (((pkt[9] << 8) + pkt[10]) ^ ((pkt[6] + pkt[8] + ((pkt[5] + pkt[7]) << 8)) & 0xFFFF)) & 0xFFFF
+                self.hwcx_write(pkt)
+                reply = self.device.read(65, 2000)
+                if reply:
+                    if len(reply) == 64:          # hidraw returns the data without the report id
+                        reply = [0] + list(reply)
+                    if ((reply[5] << 8) | reply[6]) == expected:
+                        logger.info("HWCX handshake OK")
+                        return True
+                    logger.warning(f"HWCX handshake: unexpected reply (attempt {attempt})")
+                else:
+                    logger.warning(f"HWCX handshake: no reply (attempt {attempt})")
+            except Exception as e:
+                logger.warning(f"HWCX handshake error (attempt {attempt}): {e}")
+            time.sleep(0.5)
+        logger.error("HWCX handshake failed - the screen will ignore updates")
+        return False
+
+    def hwcx_page_mask(self):
+        mask = 0
+        for page in self.config.get('hwcx_pages', [1, 3, 4]):
+            if 1 <= int(page) <= 7:
+                mask |= 1 << (int(page) - 1)
+        return mask & 0x7F          # bit 7 (0x80) switches the display off
+
+    def hwcx_cpu_load(self):
+        with open('/proc/stat') as f:
+            fields = [int(v) for v in f.readline().split()[1:]]
+        idle, total = fields[3] + fields[4], sum(fields)
+        prev, self._cpu_stat = self._cpu_stat, (idle, total)
+        if not prev or total == prev[1]:
+            return 0
+        return max(0, min(100, round(100 * ((total - prev[1]) - (idle - prev[0])) / (total - prev[1]))))
+
+    @staticmethod
+    def hwcx_cpu_mhz():
+        vals = []
+        for p in glob.glob('/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq'):
+            try:
+                vals.append(int(open(p).read()))
+            except (OSError, ValueError):
+                pass
+        return max(vals) // 1000 if vals else 0
+
+    @staticmethod
+    def hwcx_ram_percent():
+        mem = {}
+        with open('/proc/meminfo') as f:
+            for line in f:
+                key, val = line.split(':', 1)
+                mem[key] = int(val.split()[0])
+        return round(100 * (mem['MemTotal'] - mem['MemAvailable']) / mem['MemTotal'])
+
+    def hwcx_fan_rpm(self):
+        wanted = self.config.get('hwcx_fan', 'auto')
+        for hw in sorted(glob.glob('/sys/class/hwmon/hwmon*')):
+            inputs = sorted(glob.glob(f'{hw}/fan*_input'))
+            for path in inputs:
+                if wanted != 'auto' and os.path.basename(path) != f'{wanted}_input':
+                    continue
+                try:
+                    rpm = int(open(path).read())
+                except (OSError, ValueError):
+                    continue
+                if rpm or wanted != 'auto':
+                    return rpm
+        return 0
+
+    def hwcx_temperatures(self):
+        """CPU/GPU temperatures, refreshed every 2 s (sensors / nvidia-smi are slow)."""
+        if time.time() - self._temps_at > 2:
+            self._temps = (self.get_cpu_temperature(), self.get_gpu_temperature())
+            self._temps_at = time.time()
+        return self._temps
+
+    def hwcx_frame(self):
+        """One status frame (command 0x02). Offsets are data offsets ([0] of the data = 0x02)."""
+        cpu_t, gpu_t = self.hwcx_temperatures()
+        now = datetime.datetime.now()
+        mhz, fan = self.hwcx_cpu_mhz(), self.hwcx_fan_rpm()
+        d = bytearray(64)
+        d[0] = 0x02
+        d[1] = max(0, min(255, cpu_t))
+        d[2] = max(0, min(255, gpu_t))
+        d[3], d[4], d[5], d[6] = now.hour, now.minute, now.second, now.microsecond // 10000
+        d[7], d[8], d[9], d[10] = now.year // 100, now.year % 100, now.month, now.day
+        d[11] = (now.weekday() + 1) % 7          # 0 = Sunday
+        d[12] = self.hwcx_cpu_load()
+        d[13], d[14] = (mhz >> 8) & 0xFF, mhz & 0xFF
+        d[19] = self.hwcx_ram_percent()
+        d[24], d[25] = (fan >> 8) & 0xFF, fan & 0xFF
+        d[48] = self.hwcx_page_mask()
+        return bytes([0x00]) + bytes(d)
+
+    def hwcx_monitor_loop(self):
+        logger.info(f"Starting HWCX status updates (pages mask 0x{self.hwcx_page_mask():02x})...")
+        interval = float(self.config.get('hwcx_update_interval', 0.5))
+        errors, count = 0, 0
+        while not self.stop_event.is_set():
+            try:
+                if self.hwcx_write(self.hwcx_frame()):
+                    errors = 0
+                    count += 1
+                    if count % 120 == 0:
+                        cpu_t, gpu_t = self._temps
+                        logger.info(f"Update #{count}: CPU={cpu_t}°C, GPU={gpu_t}°C")
+                else:
+                    errors += 1
+            except Exception as e:
+                errors += 1
+                logger.warning(f"HWCX write failed ({e})")
+            if errors >= 5:
+                logger.error("Too many errors, reconnecting...")
+                try:
+                    self.device.close()
+                except Exception:
+                    pass
+                if self.connect_device() and self.initialize_display():
+                    errors = 0
+                else:
+                    self.stop_event.wait(10)
+            self.stop_event.wait(interval)
+
     def monitor_loop(self):
         """Main monitoring loop"""
+        if self.protocol == "hwcx":
+            return self.hwcx_monitor_loop()
         logger.info("Starting temperature monitoring...")
         consecutive_errors = 0
         update_count = 0
