@@ -128,7 +128,7 @@ python3 scripts/flicker-test.py
 ### Device Not Found
 ```bash
 # Check USB connection
-lsusb | grep 0145:1005
+lsusb | grep 0145:   # 1005 = LK 360 Digital Arctic, 1002 = AK4 Digital
 
 # Check HID devices
 ls -la /dev/hidraw*

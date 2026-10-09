@@ -15,7 +15,7 @@ sudo journalctl -u xigmatek-monitor -n 20
 python3 scripts/test-device.py
 
 # Check USB connection
-lsusb | grep 0145:1005
+lsusb | grep 0145:   # 1005 = LK 360 Digital Arctic, 1002 = AK4 Digital
 
 # List HID devices
 ls -la /dev/hidraw*
@@ -35,7 +35,7 @@ ls -la /dev/hidraw*
 #### USB Connection Issues
 ```bash
 # Check USB connection
-lsusb | grep 0145:1005
+lsusb | grep 0145:   # 1005 = LK 360 Digital Arctic, 1002 = AK4 Digital
 
 # If not found:
 # 1. Try different USB port (preferably USB 2.0)

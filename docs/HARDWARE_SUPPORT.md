@@ -9,6 +9,7 @@ This document details hardware compatibility, requirements, and testing status f
 | Model | USB IDs | Display Type | Status | Notes |
 |-------|---------|--------------|--------|-------|
 | XIGMATEK LK 360 Digital Arctic | 0145:1005 | LCD | ✅ Fully Supported | Original development target |
+| XIGMATEK AK4 Digital (air cooler) | 0145:1002 ("HWCX USB Display") | Digital | ✅ Supported | Different protocol (handshake + status frame), auto-detected — see PROTOCOL.md |
 
 ### 🔍 Potentially Compatible
 

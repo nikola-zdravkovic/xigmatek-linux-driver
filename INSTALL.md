@@ -196,7 +196,7 @@ sudo alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
 **Device not found:**
 ```bash
 # Check USB connection
-lsusb | grep 0145:1005
+lsusb | grep 0145:   # 1005 = LK 360 Digital Arctic, 1002 = AK4 Digital
 
 # Try different USB port
 # Ensure device is powered on
